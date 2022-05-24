@@ -1,0 +1,148 @@
+---
+title: "Data Cleaning and Documentation"
+subtitle: "House Price - Regression"
+author: "Vidyashree Ramesh"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: TRUE
+    toc_float: TRUE
+    number_selection: FALSE
+    highlight: tango 
+---
+
+```{r load-packages, message=FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+library(skimr)
+```
+
+```{r}
+#import original data set
+houses <- read_excel("~/Desktop/1. houses.xlsx")
+```
+
+# Variable Selection
+
+Because our data set consisted of 81 variables, the way that we narrowed down most of them was by logic. As individuals who are interested in purchasing homes in the future, we evaluated which factors were the most important to us when it came to buying a home. We assumed that the factors that were most important to us might result in the sale price being increased. 
+
+Additionally, using histograms and boxplots, we examined the distributions of all 81 variables.  The variables that had skewed data were excluded from potentially being used in our project wile the ones that were normally distributed were considered in our process.
+
+The variables that we selected from the data set were: 
+
++ Id 
++ MSSubClass
++ Neighborhood
++ Overall quality 
++ Year remodeled  
++ Central air
++ Total rooms
++ Functionality
++ Garage cars
++ Year sold
++ Sale price
+
+
+Some variables that held no substantive interest to us were:  
+
++ Alley: This entire data set considers missing values as 'NA.' However, this specific variable also has a definition of 'NA' for no alley access. This can make it hard to tell if the data is missing or if it is simply a definition.  
++ Using histograms and boxplots it was found that the following variables were either left skewed or right skewed so they were disregarded: Basement Finish Surface Area 1, Basement Finish Surface Area 2, Wooden Deck Square Footage, Condition 1, Condition 2 and much more (Note there are 81 variable and thus listing them all would be too much).  
++ Street: This column has two values (Pave, Grvl). However all the observations are Paved.
+
+Some variables had large amounts of missing values that made them unusable. For instance, Lot Frontage has 259 missing observations and Fireplace Quality has 690 missing observations. These variables were of no interest to us and our research question so we filtered out these variables.
+
+## Keep Only Predictor Variables of Interest.
+
+After deciding on our factors, we filtered the data to only include the predictors of interest.
+
+```{r}
+houses_selected <- houses %>%
+  select(Id, MSSubClass, Neighborhood, OverallQual, YearRemodAdd, CentralAir,  TotRmsAbvGrd, Functional, GarageCars, YrSold,  SalePrice)
+view(houses_selected)
+```
+
+# Rename Columns
+
+To make the variables both easier to work with and comprehend for readers, they were renamed.
+
+```{r}
+colnames(houses_selected)<- c("id", "dwelling_type", "neighborhood", "overall_quality", "year_remodeled",
+                              "central_air", "total_rooms", "functionality", "garage_cars", "year_sold",
+                              "sale_price")
+view(houses_selected)
+```
+
+# Missing values
+
+```{r}
+table(is.na(houses))
+```
+
+First of all, looking at the table output, it is notable that none of our variables of interest have "NA" values, thus no data is missing within our reduced data frame. 
+
+
+# Changing variables to categorical 
+
+We checked our variables of interest to inspect if R had classified any character variables as factors or vice versa.
+
+```{r, message=FALSE, warning=FALSE}
+houses_selected$dwelling_type <- as.factor(houses_selected$dwelling_type)
+houses_selected$overall_quality <- as.factor(houses_selected$overall_quality)
+houses_selected$functionality <- as.factor(houses_selected$functionality)
+```
+
+Dwelling type (MSSubClass) and Overall Quality are classified as numeric variables but they should be categorical and thus they must be changed.
+
+Dwelling type and Overall quality were successfully changed. 
+
+# Collapsing Variables
+
+We determined that neighborhood was a very significant factor, however, it had 25 different categories. Because the data is based in Iowa and we are not familiar with the area, we were not able to determine how these categories should be collapsed. This would require spatial analysis, which is beyond the scope of the class. Additionally, having so many levels, it was not advisable to estimate so many parameters in the model. For these reasons, neighborhood was excluded from our model. 
+
+Dwelling_type (MSSubClass) is a categorical variable that we decided to collapse due to its 16 different levels. Levels 20, 30, 40, 45 and 50 all pertained to homes that were 1 to 1-1/2 stories, thus we grouped them as one group called "1_story". Levels 60, 70, 75, 80 and 85 all referred to homes that were 2 stories so they were classified as "2_story". Levels 90 and 190 were grouped together as "Duplex" and levels 120, 150, 160 and 180 were considered "PUD".  
+
+To reduce the numbers of parameters to estimate with overall quality, 10 levels were reduced into 3 categories: Good, Average and Poor. We believed it redundant to classify levels as "Very Excellent, Excellent, Very Good, Good" thus all positive connotations were grouped as good, negative connotations were grouped as poor and average was grouped as average. 
+
+We also decided to collapse functionality into 4 levels to be more easily estimated. We grouped different levels of minor deductions as 1 group "Minor Deductions." Moderate Deductions was left alone. Different levels of Major Deductions were grouped as 1 level "Major Deductions." We determined that salvage was extreme and should have its own category "Salvage."
+
+
+```{r, warning=FALSE, message=FALSE}
+# collapse categorical variables
+
+# MSSubClass
+dwelling_type_collapased<-fct_collapse(houses_selected$dwelling_type,
+ '1_Story'= c("20","30","40","45","50"), 
+ '2_Story' = c("60","70","75","80","85"), 
+  Duplex = c("90","190"),
+  PUD = c("120","150", "160","180"))
+
+# Overall Quality 
+overall_quality_collapased<-fct_collapse(houses_selected$overall_quality, 
+  Poor = c("1", "2","3","4"), 
+  Average = c("5","6","7"), 
+  Good = c("8","9","10")) 
+
+# Functionality
+functionality_collapased<-fct_collapse(houses_selected$functionality,
+  "Minor Deductions" = c("Typ", "Min1", "Min2"),
+  "Moderate Deductions" = "Mod",
+  "Major Deductions" = c("Maj1", "Maj2", "Sev"),
+  "Salvage" = c("Sal"))
+
+# combine collapsed variables with numeric variables
+houses_cleaned<-houses_selected %>% 
+  transmute(id, dwelling_type_collapased, overall_quality_collapased, year_remodeled, central_air, total_rooms, functionality_collapased, garage_cars, year_sold, sale_price)
+view(houses_cleaned)
+```
+
+```{r}
+write.csv(houses_cleaned, file = "houses_cleaned.csv", row.names = FALSE)
+view(houses_cleaned)
+```
+
+
+
+
+
+

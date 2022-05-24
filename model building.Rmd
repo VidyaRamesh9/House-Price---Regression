@@ -1,0 +1,133 @@
+---
+title: "Model Building"
+subtitle: "Regression Techniques"
+author: "Vidyashree Ramesh"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: TRUE
+    toc_float: TRUE
+    number_selection: FALSE
+    highlight: tango 
+---
+
+```{r load-packages, message=FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(leaps)
+library(MASS)
+library(tidyverse)
+library(skimr)
+library(dplyr)
+
+```
+
+```{r}
+# import cleaned data set
+houses_cleaned <- read.csv("~/Desktop/GitHub/1. House Price_Regression/2. houses.cleaned.csv")
+```
+
+# Fit a main effects (no interactions) model with the full set of P-1 predictors
+```{r}
+houses_fit <- lm(sale_price ~ dwelling_type_collapased + overall_quality_collapased + year_remodeled + central_air + total_rooms + 
+                   functionality_collapased + garage_cars + year_sold, data = houses_cleaned)
+```
+
+# summary table for this “preliminary main effects model”
+```{r}
+summary(houses_fit)
+```
+
+Preliminary model variables were dwelling type (2_story, duplex, and PUD), overall quality (good, poor), year remodeled, central air (Yes), total rooms, functionality (major and minor deductions), garage cars, year sold
+
+```{r}
+# drop id column
+houses_cleaned <- select(houses_cleaned, -c(id))
+```
+
+id doesn't provide any important information for the outcome of sale price. Hence it is dropped before the modeling process
+
+# Step Wise Regression
+# One method used to search for the best fit model was step wise regression.
+```{r}
+# stepwise selection
+base <- lm(sale_price ~ 1, data = houses_cleaned)
+fullmodel <- lm(sale_price ~ ., data = houses_cleaned)
+
+# forward selection
+step(base, scope = list(upper = fullmodel, lower = base), 
+     direction = "forward", trace = FALSE)
+
+# backward selection
+step(fullmodel, direction = "backward", trace = FALSE)
+
+# forward / backward selection
+step(base, scope = list(upper = fullmodel, lower = base), direction = "both", trace = TRUE)
+```
+
+Looking at the output, we are in search of models with lower AIC values and fewer variables. Thus, some good canidates based on the step wise selection would be a model with overall quality, cars in the garage, total rooms and year remodeled.
+
+Another potential model would be the model with overall quality, garage cars and total rooms. 
+ 
+In order to obtain a model with an even lower AIC, more variables would have to be added to the model. However, adding more variables makes the model more complicated as there are more parameters that need to be estimated for. Thus, a four variable model seems reasonable
+
+# Best Algorithm Selection 
+
+```{r, echo=FALSE}
+houses_bsa<-summary(regsubsets(sale_price~., data = houses_cleaned, nvmax = 5))
+houses_bsa$adjr2
+houses_bsa
+```
+
+When looking at the adjusted $R^2$ value, we are in search of models with higher $R^2$ values and fewer number of variables. The highest $R^2$ values are 0.654, 0.684, and 0.693. 
+
+The model that pertains the value of 0.693 has 5 variables and would probably not be the best selection as there are similar $R^2$ values with fewer variables. For instance, the model that pertains to 0.684, consists of garage cars, year remodeled, total rooms, and quality(Good quality in particular). This is similar to the step wise selection model as well.
+
+The model that correlates with 0.654 consists of the variables: garage cars, total rooms, and quality(Good). There are fewer variables but the adjusted $R^2$ values is compromised terribly.
+
+# Variable interaction
+
+The variables that were deemed most important were the garage cars, year remodeled, total rooms and overall quality. Based on substantive knowledge of the data and research question, I believe that there may be some interaction between the overall quality and total rooms of the house. 
+
+To run a F- test, we will consider:
+
++ $X_1$ = garage cars
++ $X_2$ = year remodeled 
++ $X_3$ = total rooms
++ $X_4$ = Quality
+
+The reduced model and our null hypothesis would be:  
+$Y_i = \beta_0 + \beta_1X_1 + \beta_2X_2 + \beta_3X_3 + \beta_4X_4$
+
+The full model would and our alternative hypothesis would be:  
+$Y_i = \beta_0 + \beta_1X_1 + \beta_2X_2 + \beta_3X_3 + \beta_4X_4 + \beta_5X_3X_4$
+
+Decision Rule: Reject $H_0$ if t* > t or if p-value < $\alpha$ = 0.05
+
+```{r}
+# reduced model 
+houses_reduced_lm <- lm(sale_price ~ garage_cars + year_remodeled + total_rooms + overall_quality_collapased, data = houses_cleaned)
+
+#full model
+houses_full_lm <- lm(sale_price ~ garage_cars + year_remodeled + total_rooms + overall_quality_collapased + total_rooms*overall_quality_collapased, data = houses_cleaned)
+
+# test / anova
+anova(houses_reduced_lm, houses_full_lm)
+```
+
+The P-Value is 6.013e-14 and is less than the $\alpha$ (= 0.05), thus we reject the null and accept that the interaction term be included in the model.
+
+```{r}
+# best model selection variables
+summary(houses_full_lm)
+```
+
+Regression equation:  
+$Y_i = \beta_0 + \beta_1X_1 + \beta_2X_2 + \beta_3X_3 + \beta_4X_4 + \beta_5X_3X_4$
+
+
+
+
+
+
+
+
